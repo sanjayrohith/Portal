@@ -1,0 +1,40 @@
+# Binaries at root or bin/
+/portal
+/portald
+/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test artifacts
+*.out
+*.test
+coverage.out
+coverage.html
+
+# Database files
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+
+# IDE & OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+__pycache__/
+*.pyc
+
+# Build distribution
+dist/
+tmp/
+certs/
+*.pem
+*.key
+*.crt
