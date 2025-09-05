@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sanjayrohith/portal/internal/config"
+	"github.com/sanjayrohith/portal/pkg/logger"
 )
 
 var (
@@ -23,13 +24,18 @@ routing registrations, and proxies incoming public HTTP/HTTPS traffic to clients
 				return fmt.Errorf("configuration validation failed: %w", err)
 			}
 
-			fmt.Printf("Starting Portal Daemon (portald)\n")
-			fmt.Printf("  Domain:        %s\n", serverCfg.Domain)
-			fmt.Printf("  Control Addr:  %s\n", serverCfg.ControlAddr)
-			fmt.Printf("  HTTP Addr:     %s\n", serverCfg.HTTPAddr)
-			fmt.Printf("  HTTPS Addr:    %s\n", serverCfg.HTTPSAddr)
-			fmt.Printf("  Admin Addr:    %s\n", serverCfg.AdminAddr)
-			fmt.Printf("  Storage:       %s (%s)\n", serverCfg.StorageType, serverCfg.StorageDSN)
+			log := logger.New(logger.Options{
+				Level:  serverCfg.LogLevel,
+				Format: "text",
+			})
+
+			log.Info("starting portal daemon (portald)",
+				"domain", serverCfg.Domain,
+				"control_addr", serverCfg.ControlAddr,
+				"http_addr", serverCfg.HTTPAddr,
+				"https_addr", serverCfg.HTTPSAddr,
+				"storage_type", serverCfg.StorageType,
+			)
 			return nil
 		},
 	}

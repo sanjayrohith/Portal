@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sanjayrohith/portal/internal/config"
+	"github.com/sanjayrohith/portal/pkg/logger"
 )
 
 var (
@@ -37,10 +38,17 @@ to expose local HTTP servers on stable, custom subdomains.`,
 				return fmt.Errorf("configuration validation failed: %w", err)
 			}
 
-			fmt.Printf("Starting tunnel for target: %s\n", clientCfg.LocalTarget)
-			fmt.Printf("Requested subdomain: %s\n", clientCfg.Subdomain)
-			fmt.Printf("Control plane server: %s\n", clientCfg.ServerAddr)
-			fmt.Printf("Inspector UI binding: %s\n", clientCfg.InspectorAddr)
+			log := logger.New(logger.Options{
+				Level:  clientCfg.LogLevel,
+				Format: "text",
+			})
+
+			log.Info("initializing portal tunnel client",
+				"target", clientCfg.LocalTarget,
+				"subdomain", clientCfg.Subdomain,
+				"server", clientCfg.ServerAddr,
+				"inspector", clientCfg.InspectorAddr,
+			)
 			return nil
 		},
 	}
