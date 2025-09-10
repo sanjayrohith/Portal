@@ -6,6 +6,7 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	portalErr "github.com/sanjayrohith/portal/pkg/errors"
 	"github.com/sanjayrohith/portal/pkg/protocol"
@@ -28,7 +29,8 @@ type Session struct {
 
 	nextStreamID atomic.Uint32
 
-	// Hook for handling ping/pong responses in Task 4
+	// Heartbeat and RTT manager
+	pingMgr     *pingManager
 	pongHandler func(nonce uint32)
 	pongMu      sync.RWMutex
 }
@@ -50,6 +52,8 @@ func NewSession(conn net.Conn, isServer bool) *Session {
 	} else {
 		s.nextStreamID.Store(1) // Client initiates odd stream IDs
 	}
+
+	s.pingMgr = newPingManager(s)
 
 	go s.recvLoop()
 
@@ -91,6 +95,21 @@ func (s *Session) AcceptStream() (*Stream, error) {
 		}
 		return stream, nil
 	}
+}
+
+// Ping sends a heartbeat PING frame and measures round-trip time.
+func (s *Session) Ping(timeout time.Duration) (time.Duration, error) {
+	return s.pingMgr.Ping(timeout)
+}
+
+// LastRTT returns the latest measured heartbeat round-trip latency.
+func (s *Session) LastRTT() time.Duration {
+	return s.pingMgr.LastRTT()
+}
+
+// StartKeepalive enables periodic background heartbeat checks.
+func (s *Session) StartKeepalive(interval time.Duration, timeout time.Duration, maxConsecutiveFailures int) {
+	s.pingMgr.StartKeepalive(interval, timeout, maxConsecutiveFailures)
 }
 
 // sendFrame transmits a binary frame to the underlying connection.
