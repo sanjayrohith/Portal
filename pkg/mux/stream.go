@@ -57,6 +57,7 @@ type frameSender interface {
 type Stream struct {
 	id     uint32
 	sender frameSender
+	flow   *flowController
 
 	state     atomic.Uint32
 	closeOnce sync.Once
@@ -78,6 +79,7 @@ func newStream(id uint32, sender frameSender) *Stream {
 	s := &Stream{
 		id:      id,
 		sender:  sender,
+		flow:    newFlowController(id, DefaultInitialWindowSize, sender),
 		closeCh: make(chan struct{}),
 	}
 	s.readCond = sync.NewCond(&s.readMu)
@@ -104,6 +106,10 @@ func (s *Stream) Read(p []byte) (n int, err error) {
 		currentState := StreamState(s.state.Load())
 		if s.readBuf.Len() > 0 {
 			n, err = s.readBuf.Read(p)
+			if n > 0 && s.flow != nil {
+				// Replenish receive window asynchronously or immediately
+				_ = s.flow.notifyConsumed(n)
+			}
 			return n, err
 		}
 
@@ -127,7 +133,7 @@ func (s *Stream) Read(p []byte) (n int, err error) {
 	}
 }
 
-// Write sends payload bytes as DATA frames over the multiplexed transport.
+// Write sends payload bytes as DATA frames respecting windowed flow control.
 func (s *Stream) Write(p []byte) (n int, err error) {
 	currentState := StreamState(s.state.Load())
 	if currentState == StreamClosed || currentState == StreamReset || currentState == StreamHalfClosedLocal {
@@ -138,20 +144,34 @@ func (s *Stream) Write(p []byte) (n int, err error) {
 	remaining := p
 
 	for len(remaining) > 0 {
-		chunkSize := len(remaining)
-		if chunkSize > protocol.DefaultMaxPayloadLength {
-			chunkSize = protocol.DefaultMaxPayloadLength
+		currentState = StreamState(s.state.Load())
+		if currentState == StreamClosed || currentState == StreamReset || currentState == StreamHalfClosedLocal {
+			return n, portalErr.ErrConnectionClosed
 		}
 
-		chunk := remaining[:chunkSize]
+		targetChunk := len(remaining)
+		if targetChunk > protocol.DefaultMaxPayloadLength {
+			targetChunk = protocol.DefaultMaxPayloadLength
+		}
+
+		// Acquire flow control credit
+		credit, err := s.flow.acquireSendCredit(targetChunk, s.closeCh)
+		if err != nil {
+			return n, err
+		}
+		if credit == 0 {
+			return n, portalErr.ErrConnectionClosed
+		}
+
+		chunk := remaining[:credit]
 		frame := protocol.NewDataFrame(s.id, protocol.FlagNone, chunk)
 
 		if err := s.sender.sendFrame(frame); err != nil {
 			return n, err
 		}
 
-		n += chunkSize
-		remaining = remaining[chunkSize:]
+		n += credit
+		remaining = remaining[credit:]
 	}
 
 	return total, nil
@@ -163,6 +183,13 @@ func (s *Stream) Close() error {
 	s.closeOnce.Do(func() {
 		close(s.closeCh)
 		s.transitionCloseLocal()
+
+		// Wake up any blocked writers in flow control
+		if s.flow != nil {
+			s.flow.sendMu.Lock()
+			s.flow.sendCond.Broadcast()
+			s.flow.sendMu.Unlock()
+		}
 
 		// Send CLOSE frame with FIN flag
 		finFrame := protocol.NewCloseFrame(s.id, protocol.FlagFin)
@@ -180,6 +207,13 @@ func (s *Stream) Close() error {
 // Reset aborts the stream immediately (sends RST).
 func (s *Stream) Reset() error {
 	s.state.Store(uint32(StreamReset))
+
+	if s.flow != nil {
+		s.flow.sendMu.Lock()
+		s.flow.sendCond.Broadcast()
+		s.flow.sendMu.Unlock()
+	}
+
 	rstFrame := protocol.NewCloseFrame(s.id, protocol.FlagRst)
 	_ = s.sender.sendFrame(rstFrame)
 
@@ -240,6 +274,13 @@ func (s *Stream) pushData(data []byte, fin bool) error {
 
 	s.readCond.Broadcast()
 	return nil
+}
+
+// handleWindowUpdate processes incoming WINDOW_UPDATE frames replenishing outbound send credit.
+func (s *Stream) handleWindowUpdate(delta uint32) {
+	if s.flow != nil {
+		s.flow.addSendCredit(delta)
+	}
 }
 
 // LocalAddr returns the local network address of the underlying session.
