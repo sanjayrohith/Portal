@@ -5,6 +5,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/sanjayrohith/portal/pkg/auth"
 	portalErr "github.com/sanjayrohith/portal/pkg/errors"
 )
 
@@ -27,6 +28,48 @@ func DefaultServerAuthorizer(baseDomain string) HandshakeAuthorizer {
 			ServerTime:           time.Now().Unix(),
 			HeartbeatIntervalSec: 15,
 			Capabilities:         []string{"mux-v1", "flow-control"},
+		}, nil
+	}
+}
+
+// NewTokenAuthorizer creates a HandshakeAuthorizer that enforces token authentication against a TokenStore.
+func NewTokenAuthorizer(store auth.TokenStore, baseDomain string) HandshakeAuthorizer {
+	return func(clientHello *ClientHello) (*ServerHello, error) {
+		if clientHello.AuthToken == "" {
+			rejection := &ServerHello{
+				Version:      CurrentProtocolVersion,
+				StatusCode:   portalErr.StatusUnauthorized,
+				ErrorMessage: "authentication token required: no token provided",
+				ServerTime:   time.Now().Unix(),
+			}
+			return rejection, portalErr.New(portalErr.StatusUnauthorized, "authentication token required", portalErr.ErrUnauthorized)
+		}
+
+		token, err := store.ValidateToken(clientHello.AuthToken)
+		if err != nil {
+			rejection := &ServerHello{
+				Version:      CurrentProtocolVersion,
+				StatusCode:   portalErr.StatusUnauthorized,
+				ErrorMessage: fmt.Sprintf("authentication failed: %v", err),
+				ServerTime:   time.Now().Unix(),
+			}
+			return rejection, portalErr.New(portalErr.StatusUnauthorized, rejection.ErrorMessage, err)
+		}
+
+		subdomain := clientHello.Subdomain
+		if subdomain == "" {
+			subdomain = fmt.Sprintf("tunnel-%s", token.ID)
+		}
+
+		publicURL := fmt.Sprintf("https://%s.%s", subdomain, baseDomain)
+		return &ServerHello{
+			Version:              CurrentProtocolVersion,
+			StatusCode:           portalErr.StatusSuccess,
+			AssignedSubdomain:    subdomain,
+			PublicURL:            publicURL,
+			ServerTime:           time.Now().Unix(),
+			HeartbeatIntervalSec: 15,
+			Capabilities:         []string{"mux-v1", "flow-control", "auth-v1"},
 		}, nil
 	}
 }
