@@ -34,8 +34,18 @@ func DefaultServerAuthorizer(baseDomain string) HandshakeAuthorizer {
 
 // NewTokenAuthorizer creates a HandshakeAuthorizer that enforces token authentication against a TokenStore.
 func NewTokenAuthorizer(store auth.TokenStore, baseDomain string) HandshakeAuthorizer {
+	return NewAuditedTokenAuthorizer(store, baseDomain, nil)
+}
+
+// NewAuditedTokenAuthorizer creates a HandshakeAuthorizer that enforces token authentication with security audit logging.
+func NewAuditedTokenAuthorizer(store auth.TokenStore, baseDomain string, auditor *auth.Auditor) HandshakeAuthorizer {
 	return func(clientHello *ClientHello) (*ServerHello, error) {
+		remoteAddr := "client"
+
 		if clientHello.AuthToken == "" {
+			if auditor != nil {
+				auditor.LogFailure(clientHello.ClientID, remoteAddr, clientHello.Subdomain, "missing_token", portalErr.ErrUnauthorized)
+			}
 			rejection := &ServerHello{
 				Version:      CurrentProtocolVersion,
 				StatusCode:   portalErr.StatusUnauthorized,
@@ -47,6 +57,9 @@ func NewTokenAuthorizer(store auth.TokenStore, baseDomain string) HandshakeAutho
 
 		token, err := store.ValidateToken(clientHello.AuthToken)
 		if err != nil {
+			if auditor != nil {
+				auditor.LogFailure(clientHello.ClientID, remoteAddr, clientHello.Subdomain, "invalid_or_revoked_token", err)
+			}
 			rejection := &ServerHello{
 				Version:      CurrentProtocolVersion,
 				StatusCode:   portalErr.StatusUnauthorized,
@@ -59,6 +72,10 @@ func NewTokenAuthorizer(store auth.TokenStore, baseDomain string) HandshakeAutho
 		subdomain := clientHello.Subdomain
 		if subdomain == "" {
 			subdomain = fmt.Sprintf("tunnel-%s", token.ID)
+		}
+
+		if auditor != nil {
+			auditor.LogSuccess(clientHello.ClientID, remoteAddr, subdomain, token.Owner, token.ID)
 		}
 
 		publicURL := fmt.Sprintf("https://%s.%s", subdomain, baseDomain)
