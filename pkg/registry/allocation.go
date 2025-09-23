@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/sanjayrohith/portal/pkg/errors"
 	"github.com/sanjayrohith/portal/pkg/mux"
 )
 
@@ -58,6 +57,10 @@ func (r *SubdomainRegistry) Allocate(subdomain string, tokenHash string, owner s
 		return rec, nil
 	}
 
-	// Claimed by a different token: handled by conflict resolution
-	return nil, fmt.Errorf("%w: subdomain %q is reserved by another user", errors.ErrSubdomainTaken, normalized)
+	// Claimed by a different token: return structured conflict error
+	return nil, &SubdomainConflictError{
+		Subdomain:     normalized,
+		ReservedOwner: rec.Owner,
+		RequestedBy:   owner,
+	}
 }
