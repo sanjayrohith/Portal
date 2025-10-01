@@ -177,8 +177,9 @@ func (s *Stream) Write(p []byte) (n int, err error) {
 	return total, nil
 }
 
-// Close gracefully closes the local writing half of the stream (sends FIN).
-func (s *Stream) Close() error {
+// CloseWrite sends a FIN frame to shut down the local writing half of the stream,
+// transitioning the stream to StreamHalfClosedLocal while leaving reading open.
+func (s *Stream) CloseWrite() error {
 	var err error
 	s.closeOnce.Do(func() {
 		close(s.closeCh)
@@ -193,15 +194,28 @@ func (s *Stream) Close() error {
 
 		// Send CLOSE frame with FIN flag
 		finFrame := protocol.NewCloseFrame(s.id, protocol.FlagFin)
-		_ = s.sender.sendFrame(finFrame)
+		err = s.sender.sendFrame(finFrame)
 
-		s.sender.onStreamClosed(s.id)
-
-		s.readMu.Lock()
-		s.readCond.Broadcast()
-		s.readMu.Unlock()
+		// Note: we do NOT unregister from session yet if the remote side hasn't closed,
+		// allowing incoming data from remote to continue being received.
+		if StreamState(s.state.Load()) == StreamClosed {
+			s.sender.onStreamClosed(s.id)
+		}
 	})
 	return err
+}
+
+// Close gracefully closes the stream in both directions.
+func (s *Stream) Close() error {
+	_ = s.CloseWrite()
+
+	s.readMu.Lock()
+	s.state.Store(uint32(StreamClosed))
+	s.readCond.Broadcast()
+	s.readMu.Unlock()
+
+	s.sender.onStreamClosed(s.id)
+	return nil
 }
 
 // Reset aborts the stream immediately (sends RST).
@@ -267,6 +281,9 @@ func (s *Stream) pushData(data []byte, fin bool) error {
 				nxt = StreamHalfClosedRemote
 			}
 			if s.state.CompareAndSwap(uint32(cur), uint32(nxt)) {
+				if nxt == StreamClosed {
+					s.sender.onStreamClosed(s.id)
+				}
 				break
 			}
 		}
