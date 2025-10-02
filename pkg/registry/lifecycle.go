@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -60,6 +61,10 @@ func (r *SubdomainRegistry) ReleaseSubdomain(subdomain, tokenHash string) error 
 	}
 
 	delete(r.records, normalized)
+
+	if r.storage != nil {
+		_ = r.storage.DeleteReservation(context.Background(), normalized)
+	}
 	return nil
 }
 

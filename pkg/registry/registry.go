@@ -1,25 +1,62 @@
 package registry
 
 import (
+	"context"
 	"strings"
 	"sync"
 
 	"github.com/sanjayrohith/portal/pkg/mux"
+	"github.com/sanjayrohith/portal/pkg/storage"
 )
 
-// SubdomainRegistry provides thread-safe in-memory routing and mapping from subdomains to active sessions.
+// SubdomainRegistry provides thread-safe in-memory routing and mapping from subdomains to active sessions,
+// optionally backed by a persistent SubdomainRepository.
 type SubdomainRegistry struct {
 	mu       sync.RWMutex
 	records  map[string]*SubdomainRecord
 	sessions map[*mux.Session]string
+	storage  storage.SubdomainRepository
 }
 
-// NewSubdomainRegistry creates an empty SubdomainRegistry.
+// NewSubdomainRegistry creates an empty in-memory SubdomainRegistry.
 func NewSubdomainRegistry() *SubdomainRegistry {
+	return NewSubdomainRegistryWithStorage(nil)
+}
+
+// NewSubdomainRegistryWithStorage creates a SubdomainRegistry backed by persistent storage.
+func NewSubdomainRegistryWithStorage(storageRepo storage.SubdomainRepository) *SubdomainRegistry {
 	return &SubdomainRegistry{
 		records:  make(map[string]*SubdomainRecord),
 		sessions: make(map[*mux.Session]string),
+		storage:  storageRepo,
 	}
+}
+
+// LoadFromStorage restores all persistent reservations from the storage repository on daemon startup.
+func (r *SubdomainRegistry) LoadFromStorage(ctx context.Context) error {
+	if r.storage == nil {
+		return nil
+	}
+
+	reservations, err := r.storage.ListReservations(ctx)
+	if err != nil {
+		return err
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, res := range reservations {
+		r.records[res.Subdomain] = &SubdomainRecord{
+			Subdomain:     res.Subdomain,
+			TokenHash:     res.TokenHash,
+			Owner:         res.Owner,
+			ActiveSession: nil,
+			CreatedAt:     res.CreatedAt,
+			LastActiveAt:  res.LastActiveAt,
+		}
+	}
+	return nil
 }
 
 // GetSession looks up the currently active multiplexer session for a subdomain.

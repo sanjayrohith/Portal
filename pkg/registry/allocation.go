@@ -1,10 +1,12 @@
 package registry
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/sanjayrohith/portal/pkg/mux"
+	"github.com/sanjayrohith/portal/pkg/storage"
 )
 
 // Allocate claims or reclaims a subdomain for an authenticated token and active session.
@@ -33,6 +35,20 @@ func (r *SubdomainRegistry) Allocate(subdomain string, tokenHash string, owner s
 			CreatedAt:     now,
 			LastActiveAt:  now,
 		}
+
+		if r.storage != nil {
+			persistentRes := &storage.SubdomainReservation{
+				Subdomain:    normalized,
+				TokenHash:    tokenHash,
+				Owner:        owner,
+				CreatedAt:    now,
+				LastActiveAt: now,
+			}
+			if _, err := r.storage.ClaimReservation(context.Background(), persistentRes); err != nil {
+				return nil, err
+			}
+		}
+
 		r.records[normalized] = rec
 		if session != nil {
 			r.sessions[session] = normalized
@@ -49,8 +65,14 @@ func (r *SubdomainRegistry) Allocate(subdomain string, tokenHash string, owner s
 			_ = rec.ActiveSession.Close()
 		}
 
+		now := time.Now()
 		rec.ActiveSession = session
-		rec.LastActiveAt = time.Now()
+		rec.LastActiveAt = now
+
+		if r.storage != nil {
+			_ = r.storage.UpdateLastActive(context.Background(), normalized, now)
+		}
+
 		if session != nil {
 			r.sessions[session] = normalized
 		}
