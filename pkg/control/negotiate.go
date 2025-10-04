@@ -7,6 +7,7 @@ import (
 
 	"github.com/sanjayrohith/portal/pkg/auth"
 	portalErr "github.com/sanjayrohith/portal/pkg/errors"
+	"github.com/sanjayrohith/portal/pkg/registry"
 )
 
 // HandshakeAuthorizer defines a callback validating client hello parameters and deciding subdomain assignment.
@@ -87,6 +88,80 @@ func NewAuditedTokenAuthorizer(store auth.TokenStore, baseDomain string, auditor
 			ServerTime:           time.Now().Unix(),
 			HeartbeatIntervalSec: 15,
 			Capabilities:         []string{"mux-v1", "flow-control", "auth-v1"},
+		}, nil
+	}
+}
+
+// NewPersistentReclamationAuthorizer enforces token auth and handles persistent subdomain reclamation via SubdomainRegistry.
+func NewPersistentReclamationAuthorizer(
+	store auth.TokenStore,
+	reg *registry.SubdomainRegistry,
+	baseDomain string,
+	auditor *auth.Auditor,
+) HandshakeAuthorizer {
+	return func(clientHello *ClientHello) (*ServerHello, error) {
+		remoteAddr := "client"
+
+		if clientHello.AuthToken == "" {
+			if auditor != nil {
+				auditor.LogFailure(clientHello.ClientID, remoteAddr, clientHello.Subdomain, "missing_token", portalErr.ErrUnauthorized)
+			}
+			rejection := &ServerHello{
+				Version:      CurrentProtocolVersion,
+				StatusCode:   portalErr.StatusUnauthorized,
+				ErrorMessage: "authentication token required: no token provided",
+				ServerTime:   time.Now().Unix(),
+			}
+			return rejection, portalErr.New(portalErr.StatusUnauthorized, "authentication token required", portalErr.ErrUnauthorized)
+		}
+
+		token, err := store.ValidateToken(clientHello.AuthToken)
+		if err != nil {
+			if auditor != nil {
+				auditor.LogFailure(clientHello.ClientID, remoteAddr, clientHello.Subdomain, "invalid_or_revoked_token", err)
+			}
+			rejection := &ServerHello{
+				Version:      CurrentProtocolVersion,
+				StatusCode:   portalErr.StatusUnauthorized,
+				ErrorMessage: fmt.Sprintf("authentication failed: %v", err),
+				ServerTime:   time.Now().Unix(),
+			}
+			return rejection, portalErr.New(portalErr.StatusUnauthorized, rejection.ErrorMessage, err)
+		}
+
+		requestedSubdomain := clientHello.Subdomain
+		if requestedSubdomain == "" {
+			requestedSubdomain = fmt.Sprintf("tunnel-%s", token.ID)
+		}
+
+		// Reclaim or allocate through registry
+		rec, err := reg.Allocate(requestedSubdomain, token.Hash, token.Owner, nil)
+		if err != nil {
+			if auditor != nil {
+				auditor.LogFailure(clientHello.ClientID, remoteAddr, requestedSubdomain, "subdomain_conflict", err)
+			}
+			rejection := &ServerHello{
+				Version:      CurrentProtocolVersion,
+				StatusCode:   portalErr.StatusSubdomainTaken,
+				ErrorMessage: fmt.Sprintf("subdomain conflict: %v", err),
+				ServerTime:   time.Now().Unix(),
+			}
+			return rejection, portalErr.New(portalErr.StatusSubdomainTaken, rejection.ErrorMessage, err)
+		}
+
+		if auditor != nil {
+			auditor.LogSuccess(clientHello.ClientID, remoteAddr, rec.Subdomain, token.Owner, token.ID)
+		}
+
+		publicURL := fmt.Sprintf("https://%s.%s", rec.Subdomain, baseDomain)
+		return &ServerHello{
+			Version:              CurrentProtocolVersion,
+			StatusCode:           portalErr.StatusSuccess,
+			AssignedSubdomain:    rec.Subdomain,
+			PublicURL:            publicURL,
+			ServerTime:           time.Now().Unix(),
+			HeartbeatIntervalSec: 15,
+			Capabilities:         []string{"mux-v1", "flow-control", "auth-v1", "persistent-reclaim"},
 		}, nil
 	}
 }
