@@ -16,13 +16,23 @@ const (
 // Server hosts the local request inspector. Its listener is intentionally
 // restricted to IPv4 loopback so captured traffic cannot be exposed remotely.
 type Server struct {
-	httpServer *http.Server
-	addr       string
+	httpServer   *http.Server
+	addr         string
+	replayTarget string
 }
 
 // NewServer creates an inspector server on 127.0.0.1:4040.
 func NewServer(buffer *RingBuffer) *Server {
-	return newServer(DefaultInspectorAddr, buffer)
+	return newServer(DefaultInspectorAddr, buffer, "")
+}
+
+// NewServerWithReplayTarget creates an inspector server that can replay
+// captured requests to the supplied loopback target.
+func NewServerWithReplayTarget(buffer *RingBuffer, target string) (*Server, error) {
+	if err := validateReplayTarget(target); err != nil {
+		return nil, err
+	}
+	return newServer(DefaultInspectorAddr, buffer, target), nil
 }
 
 // NewServerWithAddr creates an inspector server on a custom loopback port.
@@ -32,17 +42,18 @@ func NewServerWithAddr(addr string, buffer *RingBuffer) (*Server, error) {
 	if err := validateInspectorAddr(addr); err != nil {
 		return nil, err
 	}
-	return newServer(addr, buffer), nil
+	return newServer(addr, buffer, ""), nil
 }
 
-func newServer(addr string, buffer *RingBuffer) *Server {
+func newServer(addr string, buffer *RingBuffer, replayTarget string) *Server {
 	if buffer == nil {
 		buffer = NewRingBuffer(0)
 	}
 	return &Server{
-		addr: addr,
+		addr:         addr,
+		replayTarget: replayTarget,
 		httpServer: &http.Server{
-			Handler: newAPIHandler(buffer),
+			Handler: newAPIHandler(buffer, replayTarget),
 		},
 	}
 }
@@ -98,8 +109,4 @@ func validateInspectorAddr(addr string) error {
 		return fmt.Errorf("inspector address must include a port")
 	}
 	return nil
-}
-
-func newAPIHandler(*RingBuffer) http.Handler {
-	return http.NotFoundHandler()
 }

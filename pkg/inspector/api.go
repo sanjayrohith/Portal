@@ -20,7 +20,7 @@ type RequestSummary struct {
 	ClientIP   string        `json:"client_ip,omitempty"`
 }
 
-func newAPIHandler(buffer *RingBuffer) http.Handler {
+func newAPIHandler(buffer *RingBuffer, replayTarget string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		const prefix = "/api/requests"
 		if r.URL.Path == prefix || r.URL.Path == prefix+"/" {
@@ -33,11 +33,25 @@ func newAPIHandler(buffer *RingBuffer) http.Handler {
 		}
 
 		if strings.HasPrefix(r.URL.Path, prefix+"/") {
+			id := strings.TrimPrefix(r.URL.Path, prefix+"/")
+			if strings.HasSuffix(id, "/replay") {
+				if r.Method != http.MethodPost {
+					methodNotAllowed(w, http.MethodPost)
+					return
+				}
+				id = strings.TrimSuffix(id, "/replay")
+				if id == "" || strings.Contains(id, "/") {
+					writeJSONError(w, http.StatusNotFound, "request not found")
+					return
+				}
+				handleRequestReplay(w, buffer, id, replayTarget)
+				return
+			}
+
 			if r.Method != http.MethodGet {
 				methodNotAllowed(w, http.MethodGet)
 				return
 			}
-			id := strings.TrimPrefix(r.URL.Path, prefix+"/")
 			if id == "" || strings.Contains(id, "/") {
 				writeJSONError(w, http.StatusNotFound, "request not found")
 				return
@@ -48,6 +62,20 @@ func newAPIHandler(buffer *RingBuffer) http.Handler {
 
 		http.NotFound(w, r)
 	})
+}
+
+func handleRequestReplay(w http.ResponseWriter, buffer *RingBuffer, id, target string) {
+	transaction, ok := buffer.Get(id)
+	if !ok {
+		writeJSONError(w, http.StatusNotFound, "request not found")
+		return
+	}
+	result, err := replayTransaction(transaction, target)
+	if err != nil {
+		writeJSONError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func handleRequestList(w http.ResponseWriter, buffer *RingBuffer) {
