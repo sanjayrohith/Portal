@@ -93,6 +93,35 @@ function renderDetail(transaction) {
     <section class="detail-section"><h3>Request body</h3>${renderBody(transaction.request.body)}</section>
     ${transaction.response ? `<section class="detail-section response-section"><h3>Response headers</h3>${renderHeaders(transaction.response.headers)}</section><section class="detail-section"><h3>Response body</h3>${renderBody(transaction.response.body)}</section>` : ''}
   </div>`;
+  document.querySelector('#replay-button').addEventListener('click', replayRequest);
+}
+
+async function replayRequest(event) {
+  const button = event.currentTarget;
+  button.disabled = true;
+  button.textContent = 'Replaying';
+  try {
+    const response = await fetch(`/api/requests/${encodeURIComponent(button.dataset.id)}/replay`, { method: 'POST' });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+    showToast(`Replay returned ${result.status_code}`, 'success');
+  } catch (error) {
+    showToast(`Replay failed: ${error.message}`, 'error');
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Replay';
+  }
+}
+
+function showToast(message, type) {
+  const existing = document.querySelector('.toast');
+  if (existing) existing.remove();
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.setAttribute('role', 'status');
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  window.setTimeout(() => toast.remove(), 3600);
 }
 
 function renderHeaders(headers) {
