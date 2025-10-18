@@ -21,7 +21,12 @@ type RequestSummary struct {
 }
 
 func newAPIHandler(buffer *RingBuffer, replayTarget string, events *eventHub) http.Handler {
+	static := staticHandler()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" || strings.HasPrefix(r.URL.Path, "/static/") {
+			static.ServeHTTP(w, r)
+			return
+		}
 		if r.URL.Path == "/api/events" {
 			handleEvents(w, r, events)
 			return
