@@ -37,7 +37,16 @@ function renderRequests() {
 }
 
 function addRequest(request) {
-  state.requests.set(request.id, request);
+  const summary = request.request ? {
+    id: request.id,
+    method: request.request.method,
+    path: request.request.path || request.request.url,
+    status_code: request.response && request.response.status_code,
+    started_at: request.started_at,
+    duration: request.duration,
+    client_ip: request.client_ip || request.request.client_ip
+  } : request;
+  state.requests.set(summary.id, summary);
   renderRequests();
 }
 
@@ -63,11 +72,54 @@ function selectRequest(id) {
   renderRequests();
   fetch(`/api/requests/${encodeURIComponent(id)}`)
     .then((response) => response.json())
-    .then((request) => {
-      const panel = document.querySelector('#detail-panel');
-      panel.innerHTML = `<div class="detail-placeholder"><p>Request <strong>${escapeHTML(request.id)}</strong> selected.</p></div>`;
-    })
+    .then(renderDetail)
     .catch(() => {});
+}
+
+function renderDetail(transaction) {
+  const panel = document.querySelector('#detail-panel');
+  const requestURL = transaction.request.url || transaction.request.path || '/';
+  let query = '';
+  try { query = new URL(requestURL, window.location.origin).search; } catch (_) {}
+  const status = transaction.response && transaction.response.status_code;
+  panel.innerHTML = `<div class="detail-content">
+    <div class="detail-header">
+      <div><span class="method detail-method">${escapeHTML(transaction.request.method || 'Request')}</span><h2>${escapeHTML(transaction.request.path || requestURL)}</h2></div>
+      <button class="replay-button" id="replay-button" data-id="${escapeHTML(transaction.id)}">Replay</button>
+    </div>
+    <div class="detail-meta"><span class="response-pill ${statusClass(status || 0)}">${status || 'No response'}</span><span>${formatDuration(transaction.duration)}</span><span>${escapeHTML(transaction.client_ip || transaction.request.client_ip || 'Local')}</span></div>
+    ${query ? `<section class="detail-section"><h3>Query parameters</h3><code class="code-block">${escapeHTML(query.slice(1))}</code></section>` : ''}
+    <section class="detail-section"><h3>Request headers</h3>${renderHeaders(transaction.request.headers)}</section>
+    <section class="detail-section"><h3>Request body</h3>${renderBody(transaction.request.body)}</section>
+    ${transaction.response ? `<section class="detail-section response-section"><h3>Response headers</h3>${renderHeaders(transaction.response.headers)}</section><section class="detail-section"><h3>Response body</h3>${renderBody(transaction.response.body)}</section>` : ''}
+  </div>`;
+}
+
+function renderHeaders(headers) {
+  const entries = Object.entries(headers || {});
+  if (entries.length === 0) return '<p class="muted">No headers captured.</p>';
+  return `<dl class="headers">${entries.map(([key, values]) => `<div><dt>${escapeHTML(key)}</dt><dd>${escapeHTML(values.join(', '))}</dd></div>`).join('')}</dl>`;
+}
+
+function renderBody(body) {
+  if (!body || body.length === 0) return '<p class="muted">Empty body.</p>';
+  const text = decodeBody(body);
+  let formatted = text;
+  try { formatted = JSON.stringify(JSON.parse(text), null, 2); } catch (_) {}
+  return `<pre class="code-block body-block">${escapeHTML(formatted)}</pre>`;
+}
+
+function decodeBody(body) {
+  try {
+    const binary = atob(body);
+    return new TextDecoder().decode(Uint8Array.from(binary, (character) => character.charCodeAt(0)));
+  } catch (_) { return String(body); }
+}
+
+function formatDuration(duration) {
+  if (!duration) return 'Timing unavailable';
+  const milliseconds = Number(duration) / 1000000;
+  return milliseconds < 1 ? `${Math.round(Number(duration) / 1000)} μs` : `${milliseconds.toFixed(1)} ms`;
 }
 
 function escapeHTML(value) {
