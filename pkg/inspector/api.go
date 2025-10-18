@@ -20,8 +20,12 @@ type RequestSummary struct {
 	ClientIP   string        `json:"client_ip,omitempty"`
 }
 
-func newAPIHandler(buffer *RingBuffer, replayTarget string) http.Handler {
+func newAPIHandler(buffer *RingBuffer, replayTarget string, events *eventHub) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/events" {
+			handleEvents(w, r, events)
+			return
+		}
 		const prefix = "/api/requests"
 		if r.URL.Path == prefix || r.URL.Path == prefix+"/" {
 			if r.Method != http.MethodGet {

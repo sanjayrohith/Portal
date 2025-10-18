@@ -19,6 +19,8 @@ type Server struct {
 	httpServer   *http.Server
 	addr         string
 	replayTarget string
+	buffer       *RingBuffer
+	events       *eventHub
 }
 
 // NewServer creates an inspector server on 127.0.0.1:4040.
@@ -49,13 +51,26 @@ func newServer(addr string, buffer *RingBuffer, replayTarget string) *Server {
 	if buffer == nil {
 		buffer = NewRingBuffer(0)
 	}
+	events := newEventHub()
 	return &Server{
 		addr:         addr,
 		replayTarget: replayTarget,
+		buffer:       buffer,
+		events:       events,
 		httpServer: &http.Server{
-			Handler: newAPIHandler(buffer, replayTarget),
+			Handler: newAPIHandler(buffer, replayTarget, events),
 		},
 	}
+}
+
+// Publish stores a captured transaction and notifies connected inspector
+// clients. It is the preferred entry point for new captured exchanges.
+func (s *Server) Publish(transaction *CapturedTransaction) {
+	if transaction == nil {
+		return
+	}
+	s.buffer.Add(transaction)
+	s.events.Publish(transaction)
 }
 
 // Addr returns the configured loopback address.
