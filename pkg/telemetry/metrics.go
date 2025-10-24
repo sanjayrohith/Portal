@@ -1,0 +1,72 @@
+// Package telemetry contains Portal's Prometheus metrics and local status APIs.
+package telemetry
+
+import "github.com/prometheus/client_golang/prometheus"
+
+// Metrics is the process-wide telemetry registry for tunnel activity.
+type Metrics struct {
+	Registry prometheus.Gatherer
+
+	activeTunnels     prometheus.Gauge
+	concurrentStreams prometheus.Gauge
+	ingressBytes      *prometheus.CounterVec
+	egressBytes       *prometheus.CounterVec
+}
+
+// NewMetrics creates and registers Portal's core tunnel metrics. A nil
+// registerer creates an isolated registry suitable for a daemon instance or
+// tests.
+func NewMetrics(registerer prometheus.Registerer) (*Metrics, error) {
+	if registerer == nil {
+		registerer = prometheus.NewRegistry()
+	}
+	metrics := &Metrics{
+		activeTunnels: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: "portal",
+			Name:      "active_tunnels",
+			Help:      "Current number of active client tunnels.",
+		}),
+		concurrentStreams: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: "portal",
+			Name:      "concurrent_streams",
+			Help:      "Current number of concurrent multiplexed streams.",
+		}),
+		ingressBytes: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "portal",
+			Name:      "ingress_bytes_total",
+			Help:      "Total bytes received from public ingress by tunnel.",
+		}, []string{"tunnel"}),
+		egressBytes: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "portal",
+			Name:      "egress_bytes_total",
+			Help:      "Total bytes sent to public egress by tunnel.",
+		}, []string{"tunnel"}),
+	}
+
+	collectors := []prometheus.Collector{metrics.activeTunnels, metrics.concurrentStreams, metrics.ingressBytes, metrics.egressBytes}
+	for _, collector := range collectors {
+		if err := registerer.Register(collector); err != nil {
+			return nil, err
+		}
+	}
+	if gatherer, ok := registerer.(prometheus.Gatherer); ok {
+		metrics.Registry = gatherer
+	}
+	return metrics, nil
+}
+
+// SetActiveTunnels records the current active tunnel count.
+func (m *Metrics) SetActiveTunnels(count int) { m.activeTunnels.Set(float64(count)) }
+
+// SetConcurrentStreams records the current multiplexed stream count.
+func (m *Metrics) SetConcurrentStreams(count int) { m.concurrentStreams.Set(float64(count)) }
+
+// AddIngressBytes records bytes received from public ingress for a tunnel.
+func (m *Metrics) AddIngressBytes(tunnel string, count int64) {
+	m.ingressBytes.WithLabelValues(tunnel).Add(float64(count))
+}
+
+// AddEgressBytes records bytes sent to public egress for a tunnel.
+func (m *Metrics) AddEgressBytes(tunnel string, count int64) {
+	m.egressBytes.WithLabelValues(tunnel).Add(float64(count))
+}
