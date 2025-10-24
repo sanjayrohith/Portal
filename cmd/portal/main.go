@@ -8,10 +8,14 @@ import (
 
 	"github.com/sanjayrohith/portal/internal/config"
 	"github.com/sanjayrohith/portal/pkg/logger"
+	"github.com/sanjayrohith/portal/pkg/telemetry"
 )
 
 var (
-	clientCfg = config.DefaultClientConfig()
+	clientCfg   = config.DefaultClientConfig()
+	statusAddr  string
+	statusToken string
+	statusJSON  bool
 
 	rootCmd = &cobra.Command{
 		Use:   "portal",
@@ -57,7 +61,15 @@ to expose local HTTP servers on stable, custom subdomains.`,
 		Use:   "status",
 		Short: "Display active tunnel status and session statistics",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("No active portal sessions found.")
+			snapshot, err := telemetry.QueryLocalStatus(statusAddr, statusToken)
+			if err != nil {
+				return err
+			}
+			output, err := telemetry.FormatStatus(snapshot, statusJSON)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), output)
 			return nil
 		},
 	}
@@ -74,6 +86,9 @@ func init() {
 
 	rootCmd.AddCommand(httpCmd)
 	rootCmd.AddCommand(statusCmd)
+	statusCmd.Flags().StringVar(&statusAddr, "addr", telemetry.DefaultStatusAddr, "Local agent status address")
+	statusCmd.Flags().StringVar(&statusToken, "token", "", "Bearer token for the local status endpoint")
+	statusCmd.Flags().BoolVar(&statusJSON, "json", false, "Print status as JSON")
 }
 
 func main() {
