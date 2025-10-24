@@ -16,6 +16,8 @@ type Metrics struct {
 	ingressBytes      *prometheus.CounterVec
 	egressBytes       *prometheus.CounterVec
 	hopLatency        *prometheus.HistogramVec
+	reconnections     prometheus.Counter
+	disconnects       *prometheus.CounterVec
 }
 
 // NewMetrics creates and registers Portal's core tunnel metrics. A nil
@@ -52,9 +54,19 @@ func NewMetrics(registerer prometheus.Registerer) (*Metrics, error) {
 			Help:      "Time added by tunnel forwarding for a request hop.",
 			Buckets:   []float64{.001, .005, .010, .025, .030, .050, .100, .250, .500, 1},
 		}, []string{"tunnel"}),
+		reconnections: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: "portal",
+			Name:      "reconnections_total",
+			Help:      "Total number of successful tunnel reconnections.",
+		}),
+		disconnects: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "portal",
+			Name:      "disconnects_total",
+			Help:      "Total number of tunnel disconnects by reason.",
+		}, []string{"reason"}),
 	}
 
-	collectors := []prometheus.Collector{metrics.activeTunnels, metrics.concurrentStreams, metrics.ingressBytes, metrics.egressBytes, metrics.hopLatency}
+	collectors := []prometheus.Collector{metrics.activeTunnels, metrics.concurrentStreams, metrics.ingressBytes, metrics.egressBytes, metrics.hopLatency, metrics.reconnections, metrics.disconnects}
 	for _, collector := range collectors {
 		if err := registerer.Register(collector); err != nil {
 			return nil, err
@@ -64,6 +76,17 @@ func NewMetrics(registerer prometheus.Registerer) (*Metrics, error) {
 		metrics.Registry = gatherer
 	}
 	return metrics, nil
+}
+
+// RecordReconnection increments the successful reconnect counter.
+func (m *Metrics) RecordReconnection() { m.reconnections.Inc() }
+
+// RecordDisconnect increments the disconnect counter for a normalized reason.
+func (m *Metrics) RecordDisconnect(reason string) {
+	if reason == "" {
+		reason = "unknown"
+	}
+	m.disconnects.WithLabelValues(reason).Inc()
 }
 
 // ObserveHopLatency records the forwarding duration for a tunnel hop.
