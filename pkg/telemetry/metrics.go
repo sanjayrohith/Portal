@@ -1,7 +1,11 @@
 // Package telemetry contains Portal's Prometheus metrics and local status APIs.
 package telemetry
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+)
 
 // Metrics is the process-wide telemetry registry for tunnel activity.
 type Metrics struct {
@@ -11,6 +15,7 @@ type Metrics struct {
 	concurrentStreams prometheus.Gauge
 	ingressBytes      *prometheus.CounterVec
 	egressBytes       *prometheus.CounterVec
+	hopLatency        *prometheus.HistogramVec
 }
 
 // NewMetrics creates and registers Portal's core tunnel metrics. A nil
@@ -41,9 +46,15 @@ func NewMetrics(registerer prometheus.Registerer) (*Metrics, error) {
 			Name:      "egress_bytes_total",
 			Help:      "Total bytes sent to public egress by tunnel.",
 		}, []string{"tunnel"}),
+		hopLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace: "portal",
+			Name:      "tunnel_hop_latency_seconds",
+			Help:      "Time added by tunnel forwarding for a request hop.",
+			Buckets:   []float64{.001, .005, .010, .025, .030, .050, .100, .250, .500, 1},
+		}, []string{"tunnel"}),
 	}
 
-	collectors := []prometheus.Collector{metrics.activeTunnels, metrics.concurrentStreams, metrics.ingressBytes, metrics.egressBytes}
+	collectors := []prometheus.Collector{metrics.activeTunnels, metrics.concurrentStreams, metrics.ingressBytes, metrics.egressBytes, metrics.hopLatency}
 	for _, collector := range collectors {
 		if err := registerer.Register(collector); err != nil {
 			return nil, err
@@ -53,6 +64,14 @@ func NewMetrics(registerer prometheus.Registerer) (*Metrics, error) {
 		metrics.Registry = gatherer
 	}
 	return metrics, nil
+}
+
+// ObserveHopLatency records the forwarding duration for a tunnel hop.
+func (m *Metrics) ObserveHopLatency(tunnel string, duration time.Duration) {
+	if duration < 0 {
+		duration = 0
+	}
+	m.hopLatency.WithLabelValues(tunnel).Observe(duration.Seconds())
 }
 
 // SetActiveTunnels records the current active tunnel count.
