@@ -41,8 +41,22 @@ func (c *ClientConfig) Validate() error {
 	if c.ServerAddr == "" {
 		return fmt.Errorf("server address cannot be empty")
 	}
+	if strings.Contains(c.ServerAddr, "://") {
+		return fmt.Errorf("server address %q includes a URL scheme; use host:port such as tunnel.example.com:443", c.ServerAddr)
+	}
+	if err := validateHostPort(c.ServerAddr, "server address"); err != nil {
+		return err
+	}
 	if c.LocalTarget == "" {
 		return fmt.Errorf("local target cannot be empty")
+	}
+	if c.Subdomain != "" {
+		if err := ValidateSubdomain(c.Subdomain); err != nil {
+			return err
+		}
+	}
+	if c.HostHeader != "" && c.HostHeader != "rewrite" {
+		return fmt.Errorf("invalid --host-header %q; use empty or 'rewrite'", c.HostHeader)
 	}
 	if c.InspectorAddr != "" {
 		host, _, err := net.SplitHostPort(c.InspectorAddr)
@@ -61,6 +75,9 @@ func NormalizeLocalTarget(target string) (string, error) {
 	target = strings.TrimSpace(target)
 	if target == "" {
 		return "", fmt.Errorf("empty local target")
+	}
+	if strings.Contains(target, "://") {
+		return "", fmt.Errorf("local target %q includes a URL scheme; use host:port or port only", target)
 	}
 	if port, err := strconv.Atoi(target); err == nil {
 		if port <= 0 || port > 65535 {
@@ -87,6 +104,37 @@ func NormalizeLocalTarget(target string) (string, error) {
 		return "", fmt.Errorf("invalid target port %q", portStr)
 	}
 	return net.JoinHostPort(host, strconv.Itoa(port)), nil
+}
+
+func validateHostPort(address, label string) error {
+	host, portString, err := net.SplitHostPort(address)
+	if err != nil || host == "" {
+		return fmt.Errorf("invalid %s %q; use host:port such as 127.0.0.1:8443", label, address)
+	}
+	port, err := strconv.Atoi(portString)
+	if err != nil || port <= 0 || port > 65535 {
+		return fmt.Errorf("invalid %s port %q; choose a number from 1 to 65535", label, portString)
+	}
+	return nil
+}
+
+// ValidateSubdomain validates a single RFC 1123 DNS label for tunnel routing.
+func ValidateSubdomain(subdomain string) error {
+	if subdomain == "" {
+		return fmt.Errorf("invalid subdomain; provide a non-empty DNS label")
+	}
+	if len(subdomain) > 63 {
+		return fmt.Errorf("invalid subdomain %q; use 1-63 lowercase letters, digits, or hyphens", subdomain)
+	}
+	if subdomain != strings.ToLower(subdomain) || subdomain[0] == '-' || subdomain[len(subdomain)-1] == '-' {
+		return fmt.Errorf("invalid subdomain %q; use lowercase and do not begin or end with a hyphen", subdomain)
+	}
+	for _, character := range subdomain {
+		if character != '-' && (character < 'a' || character > 'z') && (character < '0' || character > '9') {
+			return fmt.Errorf("invalid subdomain %q; use lowercase letters, digits, or hyphens", subdomain)
+		}
+	}
+	return nil
 }
 
 // ServerConfig holds configuration parameters for the portald server daemon.
