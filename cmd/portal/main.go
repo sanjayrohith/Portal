@@ -12,10 +12,11 @@ import (
 )
 
 var (
-	clientCfg   = config.DefaultClientConfig()
-	statusAddr  string
-	statusToken string
-	statusJSON  bool
+	clientCfg     = config.DefaultClientConfig()
+	statusAddr    string
+	statusToken   string
+	statusJSON    bool
+	configLoadErr error
 
 	rootCmd = &cobra.Command{
 		Use:   "portal",
@@ -32,6 +33,9 @@ to expose local HTTP servers on stable, custom subdomains.`,
   portal http 3000 --subdomain myapp --host-header rewrite
   portal http localhost:8080 --server tunnel.example.com:443`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if configLoadErr != nil {
+				return configLoadErr
+			}
 			normalized, err := config.NormalizeLocalTarget(args[0])
 			if err != nil {
 				return err
@@ -76,6 +80,11 @@ to expose local HTTP servers on stable, custom subdomains.`,
 )
 
 func init() {
+	if loaded, err := config.LoadClientConfigIfExists(""); err != nil {
+		configLoadErr = err
+	} else {
+		clientCfg = loaded
+	}
 	httpCmd.Flags().StringVarP(&clientCfg.Subdomain, "subdomain", "s", clientCfg.Subdomain, "Custom subdomain to request from the server")
 	httpCmd.Flags().StringVar(&clientCfg.ServerAddr, "server", clientCfg.ServerAddr, "Control plane server address (host:port)")
 	httpCmd.Flags().StringVarP(&clientCfg.AuthToken, "token", "t", clientCfg.AuthToken, "Authentication token for tunnel allocation")
