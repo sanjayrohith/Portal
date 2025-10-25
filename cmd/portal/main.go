@@ -77,6 +77,24 @@ to expose local HTTP servers on stable, custom subdomains.`,
 			return nil
 		},
 	}
+
+	completionCmd = &cobra.Command{
+		Use:   "completion <bash|zsh|fish>",
+		Short: "Generate shell completion scripts",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			switch args[0] {
+			case "bash":
+				return rootCmd.GenBashCompletion(cmd.OutOrStdout())
+			case "zsh":
+				return rootCmd.GenZshCompletion(cmd.OutOrStdout())
+			case "fish":
+				return rootCmd.GenFishCompletion(cmd.OutOrStdout(), true)
+			default:
+				return fmt.Errorf("unsupported shell %q; choose bash, zsh, or fish", args[0])
+			}
+		},
+	}
 )
 
 func init() {
@@ -95,6 +113,7 @@ func init() {
 
 	rootCmd.AddCommand(httpCmd)
 	rootCmd.AddCommand(statusCmd)
+	rootCmd.AddCommand(completionCmd)
 	statusCmd.Flags().StringVar(&statusAddr, "addr", telemetry.DefaultStatusAddr, "Local agent status address")
 	statusCmd.Flags().StringVar(&statusToken, "token", "", "Bearer token for the local status endpoint")
 	statusCmd.Flags().BoolVar(&statusJSON, "json", false, "Print status as JSON")

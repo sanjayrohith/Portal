@@ -1,0 +1,59 @@
+.TH PORTAL 1 "2025-10-25" "Portal" "User Commands"
+.SH NAME
+portal \- expose a local HTTP service through a stable Portal tunnel
+.SH SYNOPSIS
+.B portal http
+.I port-or-address
+.RI [ options ]
+.br
+.B portal status
+.RI [ options ]
+.br
+.B portal completion
+.IR bash \ o|\ zsh \ o|\ fish
+.SH DESCRIPTION
+Portal creates an outbound tunnel from a local HTTP service to a Portal edge
+server. The client does not require an inbound firewall rule or router
+forwarding.
+.SH COMMANDS
+.TP
+.B http PORT
+Expose a local HTTP service. The argument may be a port, :port, or host:port.
+.TP
+.B status
+Query the local agent for active streams, uptime, and transferred bytes.
+.TP
+.B completion SHELL
+Write a completion script for bash, zsh, or fish to standard output.
+.SH OPTIONS
+.TP
+.B \-s, \-\-subdomain NAME
+Request a stable DNS label for the tunnel.
+.TP
+.B \-\-server HOST:PORT
+Set the Portal control-plane address.
+.TP
+.B \-t, \-\-token TOKEN
+Set the tunnel authentication token.
+.TP
+.B \-\-host-header rewrite
+Rewrite the upstream Host header for localhost applications.
+.TP
+.B \-\-inspector-addr 127.0.0.1:4040
+Set the loopback inspector address.
+.TP
+.B \-\-insecure
+Disable TLS certificate verification for development only.
+.SH FILES
+.TP
+.I ~/.portal/config.yaml
+Optional client defaults. Command-line flags override loaded defaults.
+.SH EXAMPLES
+.EX
+portal http 3000 --subdomain demo
+portal status --json
+portal completion bash > ~/.local/share/bash-completion/completions/portal
+.EE
+.SH SECURITY
+The request inspector binds to loopback and stores captured traffic in memory.
+Treat authentication tokens as secrets and do not use --insecure in production.
