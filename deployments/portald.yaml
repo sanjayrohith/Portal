@@ -1,0 +1,31 @@
+# portald.yaml — example server daemon configuration.
+# Copy to ./portald.yaml or /etc/portald/portald.yaml and adjust.
+domain: "tunnel.example.com"
+
+# Listener addresses.
+control_addr: ":8443"
+http_addr: ":80"
+https_addr: ":443"
+admin_addr: "127.0.0.1:9090"
+
+# Persistence backend: sqlite (standalone VPS) or postgres (cluster).
+storage_type: "sqlite"
+storage_dsn: "/var/lib/portald/portal.db"
+
+# TLS: either static cert/key pair or ACME email for DNS-01 wildcard certs.
+cert_file: "/etc/portald/tls/fullchain.pem"
+key_file: "/etc/portald/tls/privkey.pem"
+acme_email: "ops@example.com"
+acme_dir: "/var/lib/portald/certs"
+
+# Pre-provisioned authentication tokens (plaintext; hashed in memory).
+# Rotate via `portald tokens` commands and SIGHUP reload.
+auth_tokens: []
+metrics_token: "change-me-metrics-token"
+
+# Abuse protection and resource limits.
+rate_limit_requests_per_sec: 100
+max_concurrent_tunnels: 5
+max_request_body_size: 10485760
+idle_timeout: 60s
+log_level: "info"

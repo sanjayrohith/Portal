@@ -150,6 +150,8 @@ type ServerConfig struct {
 	KeyFile                 string        `json:"key_file" yaml:"key_file"`
 	ACMEEmail               string        `json:"acme_email" yaml:"acme_email"`
 	ACMEDir                 string        `json:"acme_dir" yaml:"acme_dir"`
+	AuthTokens              []string      `json:"auth_tokens" yaml:"auth_tokens"`
+	MetricsToken            string        `json:"metrics_token" yaml:"metrics_token"`
 	RateLimitRequestsPerSec int           `json:"rate_limit_requests_per_sec" yaml:"rate_limit_requests_per_sec"`
 	MaxConcurrentTunnels    int           `json:"max_concurrent_tunnels" yaml:"max_concurrent_tunnels"`
 	MaxRequestBodySize      int64         `json:"max_request_body_size" yaml:"max_request_body_size"`
@@ -187,11 +189,25 @@ func (s *ServerConfig) Validate() error {
 	if s.ControlAddr == "" {
 		return fmt.Errorf("control address cannot be empty")
 	}
+	if s.StorageType != "" && s.StorageType != "sqlite" && s.StorageType != "postgres" {
+		return fmt.Errorf("invalid storage type %q; use sqlite or postgres", s.StorageType)
+	}
 	if s.RateLimitRequestsPerSec <= 0 {
 		return fmt.Errorf("rate limit must be positive, got %d", s.RateLimitRequestsPerSec)
 	}
 	if s.MaxConcurrentTunnels <= 0 {
 		return fmt.Errorf("max concurrent tunnels must be positive, got %d", s.MaxConcurrentTunnels)
+	}
+	if s.MaxRequestBodySize <= 0 {
+		return fmt.Errorf("max request body size must be positive, got %d", s.MaxRequestBodySize)
+	}
+	if s.IdleTimeout <= 0 {
+		return fmt.Errorf("idle timeout must be positive, got %s", s.IdleTimeout)
+	}
+	switch s.LogLevel {
+	case "", "debug", "info", "warn", "error":
+	default:
+		return fmt.Errorf("invalid log level %q; use debug, info, warn, or error", s.LogLevel)
 	}
 	return nil
 }
