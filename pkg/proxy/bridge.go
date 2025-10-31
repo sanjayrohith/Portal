@@ -79,7 +79,7 @@ func (b *StreamBridge) PipeBidirectional(c1, c2 net.Conn) error {
 
 	go func() {
 		defer wg.Done()
-		_, err := io.Copy(c2, c1)
+		_, err := CopyWithSlab(c2, c1)
 		// Close writing side if supported
 		if cw, ok := c2.(interface{ CloseWrite() error }); ok {
 			_ = cw.CloseWrite()
@@ -89,7 +89,7 @@ func (b *StreamBridge) PipeBidirectional(c1, c2 net.Conn) error {
 
 	go func() {
 		defer wg.Done()
-		_, err := io.Copy(c1, c2)
+		_, err := CopyWithSlab(c1, c2)
 		if cw, ok := c1.(interface{ CloseWrite() error }); ok {
 			_ = cw.CloseWrite()
 		}
