@@ -48,7 +48,8 @@ func (w *Writer) WriteFrame(f *Frame) error {
 	}
 
 	totalLen := HeaderSize + payloadLen
-	buf := make([]byte, totalLen)
+	buf := GetEncodeBuffer(totalLen)
+	defer PutEncodeBuffer(buf)
 
 	// Pack 10-byte header
 	buf[0] = byte(f.Type)
@@ -107,8 +108,9 @@ func (r *Reader) ReadFrame() (*Frame, error) {
 
 	var payload []byte
 	if payloadLen > 0 {
-		payload = make([]byte, payloadLen)
+		payload = GetPayload(payloadLen)
 		if _, err := io.ReadFull(r.r, payload); err != nil {
+			PutPayload(payload)
 			return nil, err
 		}
 	}
