@@ -142,6 +142,12 @@ func (s *Session) Close() error {
 		s.closed.Store(true)
 		close(s.closeCh)
 
+		// Drop the PONG dispatch reference so the closed session no longer
+		// pins the heartbeat manager.
+		s.pongMu.Lock()
+		s.pongHandler = nil
+		s.pongMu.Unlock()
+
 		// Close underlying network transport
 		err = s.conn.Close()
 
@@ -190,6 +196,13 @@ func (s *Session) recvLoop() {
 func (s *Session) handleIncomingFrame(f *protocol.Frame) {
 	switch f.Type {
 	case protocol.FrameOpen:
+		if s.closed.Load() {
+			// Session is gone: refuse the stream immediately instead of
+			// queueing state nobody will ever accept or clean up.
+			rstFrame := protocol.NewCloseFrame(f.StreamID, protocol.FlagRst)
+			_ = s.sendFrame(rstFrame)
+			return
+		}
 		stream := newStream(f.StreamID, s)
 
 		s.streamsMu.Lock()

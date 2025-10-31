@@ -211,6 +211,9 @@ func (s *Stream) Close() error {
 
 	s.readMu.Lock()
 	s.state.Store(uint32(StreamClosed))
+	// Drop the read backing array so closed streams under sustained
+	// open/close cycling do not pin buffers while awaiting GC.
+	s.readBuf.Reset()
 	s.readCond.Broadcast()
 	s.readMu.Unlock()
 
@@ -234,6 +237,7 @@ func (s *Stream) Reset() error {
 	s.sender.onStreamClosed(s.id)
 
 	s.readMu.Lock()
+	s.readBuf.Reset()
 	s.readCond.Broadcast()
 	s.readMu.Unlock()
 	return nil
