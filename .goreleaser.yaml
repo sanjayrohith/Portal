@@ -1,0 +1,100 @@
+# .goreleaser.yaml — multi-platform static release pipeline for Portal.
+#
+# Produces zero-dependency static binaries for the client agent (portal) and
+# the server daemon (portald) across darwin/linux/windows on amd64/arm64.
+# All dependencies are pure Go (modernc.org/sqlite, lib/pq), so CGO stays
+# disabled and every artifact is fully static.
+#
+# Preview locally without publishing:
+#   goreleaser build --snapshot --clean
+# Cut a release by pushing a semver tag:
+#   git tag v1.0.0 && git push origin v1.0.0
+version: 2
+
+project_name: portal
+
+before:
+  hooks:
+    - go mod download
+    - go vet ./cmd/...
+
+builds:
+  - id: portal
+    main: ./cmd/portal
+    binary: portal
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+  - id: portald
+    main: ./cmd/portald
+    binary: portald
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+archives:
+  - name_template: "{{ .Name }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - README.md
+      - LICENSE*
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ .Timestamp }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.*?\))?(!)?:.+$'
+      order: 0
+    - title: Bug fixes
+      regexp: '^.*?fix(\(.*?\))?(!)?:.+$'
+      order: 10
+    - title: Performance
+      regexp: '^.*?(perf|bench)(\(.*?\))?(!)?:.+$'
+      order: 20
+    - title: Others
+      order: 999
+
+release:
+  github:
+    owner: sanjayrohith
+    name: portal
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    Portal {{ .Version }} — static binaries for `portal` (client) and `portald` (server).
+    Verify downloads against `{{ .ProjectName }}_{{ .Version }}_checksums.txt` (SHA256).
