@@ -1,0 +1,45 @@
+# Dockerfile.portal — minimal multi-stage image for the Portal client agent.
+#
+#   docker build -f Dockerfile.portal -t portal:latest .
+#   docker run --rm portal:latest --help
+#   docker run -d --name portal portal:latest http 3000 --server tunnel.example.com:443
+#
+# Static binary on scratch: no shell, no package manager, non-root UID.
+# CA bundle is copied from the builder so outbound TLS dialing works.
+
+# ---- builder ----
+FROM golang:1.27-alpine AS builder
+
+WORKDIR /src
+
+# Leverage layer caching for dependencies.
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . ./
+
+RUN CGO_ENABLED=0 go build \
+      -trimpath \
+      -ldflags="-s -w" \
+      -o /out/portal \
+      ./cmd/portal
+
+# Refresh the Alpine CA bundle for the scratch stage.
+RUN apk add --no-cache ca-certificates && update-ca-certificates
+
+# ---- runtime ----
+FROM scratch
+
+# TLS root CAs so the client can dial portald over TLS.
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
+COPY --from=builder /out/portal /portal
+
+# Distroless-style unprivileged UID:GID (no /etc/passwd entry needed).
+USER 65532:65532
+
+# Local request inspector (binds 127.0.0.1:4040 by default).
+EXPOSE 4040
+
+ENTRYPOINT ["/portal"]
+CMD ["--help"]

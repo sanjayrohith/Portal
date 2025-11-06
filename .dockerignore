@@ -1,0 +1,18 @@
+# Keep the build context lean: sources + module files only.
+.git/
+dist/
+tmp/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+certs/
+*.pem
+*.key
+*.crt
+coverage.out
+coverage.html
+.idea/
+.vscode/
+.DS_Store

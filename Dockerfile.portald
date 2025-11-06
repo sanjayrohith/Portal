@@ -1,0 +1,52 @@
+# Dockerfile.portald — minimal multi-stage image for the Portal server daemon.
+#
+#   docker build -f Dockerfile.portald -t portald:latest .
+#   docker run -d --name portald \
+#     -p 80:80 -p 443:443 -p 8443:8443 -p 9090:9090 \
+#     -v portald-data:/data \
+#     -v ./deployments/portald.yaml:/etc/portald/portald.yaml:ro \
+#     portald:latest --config /etc/portald/portald.yaml
+#
+# Static binary on scratch: no shell, no package manager, non-root UID.
+# CA bundle is copied from the builder so ACME issuance and upstream TLS work.
+
+# ---- builder ----
+FROM golang:1.27-alpine AS builder
+
+WORKDIR /src
+
+# Leverage layer caching for dependencies.
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . ./
+
+RUN CGO_ENABLED=0 go build \
+      -trimpath \
+      -ldflags="-s -w" \
+      -o /out/portald \
+      ./cmd/portald
+
+# Refresh the Alpine CA bundle for the scratch stage.
+RUN apk add --no-cache ca-certificates && update-ca-certificates
+
+# ---- runtime ----
+FROM scratch
+
+# TLS root CAs for ACME (lego) and any TLS-enabled storage backends.
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
+COPY --from=builder /out/portald /portald
+
+# Distroless-style unprivileged UID:GID (no /etc/passwd entry needed).
+USER 65532:65532
+
+# SQLite default (portal.db) lands here when no storage-dsn is configured.
+WORKDIR /data
+VOLUME /data
+
+# Public HTTP, public HTTPS, control plane, admin/metrics + health probes.
+EXPOSE 80 443 8443 9090
+
+ENTRYPOINT ["/portald"]
+CMD []
