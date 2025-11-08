@@ -1,0 +1,69 @@
+# docker-compose.yml — local end-to-end testing environment for Portal.
+#
+#   docker compose up --build -d
+#   docker compose ps
+#   ./scripts/e2e.sh
+#   docker compose down -v
+#
+# Services:
+#   portald  control plane + edge proxy (built from Dockerfile.portald),
+#            serving the portal.test wildcard domain.
+#   dns      mock DNS resolver answering *.portal.test with the portald
+#            container address (query with `dig @127.0.0.1 -p 5353
+#            webhook.portal.test`).
+#   upstream sample local service standing in for a developer's app
+#            (http-echo answers every path with a fixed body).
+name: portal-e2e
+
+networks:
+  portal-test:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  portald-data:
+
+services:
+  portald:
+    build:
+      context: .
+      dockerfile: Dockerfile.portald
+    image: portald:e2e
+    container_name: portal-e2e-portald
+    command: ["--config", "/etc/portald/portald.yaml"]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8443:8443"
+      - "9090:9090"
+    volumes:
+      - portald-data:/data
+      - ./deployments/portald.yaml:/etc/portald/portald.yaml:ro
+    networks:
+      portal-test:
+        ipv4_address: 172.28.0.10
+    restart: unless-stopped
+
+  dns:
+    image: andyshinn/dnsmasq:2.86
+    container_name: portal-e2e-dns
+    command: ["-k", "--conf-file=/etc/dnsmasq.conf"]
+    ports:
+      - "5353:53/udp"
+    volumes:
+      - ./deployments/dnsmasq.conf:/etc/dnsmasq.conf:ro
+    networks:
+      - portal-test
+    restart: unless-stopped
+
+  upstream:
+    image: hashicorp/http-echo:1.0
+    container_name: portal-e2e-upstream
+    command: ["-text=portal-upstream-ok", "-listen=:3000"]
+    expose:
+      - "3000"
+    networks:
+      - portal-test
+    restart: unless-stopped
