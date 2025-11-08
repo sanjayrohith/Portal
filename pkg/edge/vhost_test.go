@@ -10,9 +10,9 @@ func TestVHostRouter_ExtractSubdomain(t *testing.T) {
 	router := NewVHostRouter("portal.dev")
 
 	tests := []struct {
-		name       string
-		host       string
-		wantSub    string
+		name    string
+		host    string
+		wantSub string
 	}{
 		{"standard subdomain", "myapp.portal.dev", "myapp"},
 		{"subdomain with port", "api.portal.dev:8080", "api"},

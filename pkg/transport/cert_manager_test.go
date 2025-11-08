@@ -91,6 +91,7 @@ func TestCertificateManagerStartAndTLSConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	done := make(chan error, 1)
 	go func() { done <- manager.Start(ctx) }()
 	select {

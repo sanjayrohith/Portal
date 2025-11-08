@@ -27,14 +27,14 @@ var (
 
 // Token represents an authentication token with ownership and quota metadata.
 type Token struct {
-	ID           string    `json:"id"`
-	Hash         string    `json:"hash"`
-	Owner        string    `json:"owner"`
-	MaxTunnels   int       `json:"max_tunnels"`
-	RateLimit    int       `json:"rate_limit"`
-	Revoked      bool      `json:"revoked"`
-	CreatedAt    time.Time `json:"created_at"`
-	ExpiresAt    time.Time `json:"expires_at,omitempty"`
+	ID         string    `json:"id"`
+	Hash       string    `json:"hash"`
+	Owner      string    `json:"owner"`
+	MaxTunnels int       `json:"max_tunnels"`
+	RateLimit  int       `json:"rate_limit"`
+	Revoked    bool      `json:"revoked"`
+	CreatedAt  time.Time `json:"created_at"`
+	ExpiresAt  time.Time `json:"expires_at,omitempty"`
 }
 
 // HashToken computes a standard SHA-256 hex digest of the raw token string.

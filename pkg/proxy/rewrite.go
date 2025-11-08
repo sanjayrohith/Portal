@@ -18,9 +18,9 @@ const (
 
 // HostRewriter handles rewriting the HTTP Host header and adding proxy forwarding headers.
 type HostRewriter struct {
-	mode        RewriteMode
-	customHost  string
-	targetHost  string
+	mode       RewriteMode
+	customHost string
+	targetHost string
 }
 
 // NewHostRewriter creates a new HostRewriter.

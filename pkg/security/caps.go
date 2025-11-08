@@ -37,8 +37,8 @@ func RequestSizeCapMiddleware(maxBodySize int64, next http.Handler) http.Handler
 
 // BoundedReader wraps an io.Reader and returns an error if reading exceeds maxBytes.
 type BoundedReader struct {
-	r        io.Reader
-	maxBytes int64
+	r         io.Reader
+	maxBytes  int64
 	readSoFar int64
 }
 
