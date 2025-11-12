@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"fmt"
 	"net/http"
 )
 
@@ -32,10 +33,23 @@ func NewHostRewriter(mode RewriteMode, customHost, targetHost string) *HostRewri
 	}
 }
 
-// RewriteRequest modifies the given http.Request in-place according to configuration.
-func (r *HostRewriter) RewriteRequest(req *http.Request) {
+// RewriteRequest modifies the given http.Request in-place according to
+// configuration. It is equivalent to RewriteRequestFromPeer with an unknown
+// peer (no X-Forwarded-For appended).
+func (r *HostRewriter) RewriteRequest(req *http.Request) error {
+	return r.RewriteRequestFromPeer(req, "")
+}
+
+// RewriteRequestFromPeer rewrites req and sanitizes forwarding headers using
+// peerAddr (typically the edge stream's RemoteAddr) as the trusted client
+// identity. Client-supplied X-Forwarded-* values are always overwritten so a
+// malicious client cannot spoof its origin to the upstream.
+func (r *HostRewriter) RewriteRequestFromPeer(req *http.Request, peerAddr string) error {
 	if req == nil {
-		return
+		return fmt.Errorf("cannot rewrite nil request")
+	}
+	if err := ValidateProxyRequest(req); err != nil {
+		return err
 	}
 
 	originalHost := req.Host
@@ -63,21 +77,14 @@ func (r *HostRewriter) RewriteRequest(req *http.Request) {
 		req.URL.Host = req.Host
 	}
 
-	// Set standard X-Forwarded-* headers if not already set
-	if req.Header.Get("X-Forwarded-Host") == "" && originalHost != "" {
-		req.Header.Set("X-Forwarded-Host", originalHost)
+	proto := "http"
+	if req.TLS != nil {
+		proto = "https"
 	}
 
-	if req.Header.Get("X-Forwarded-Proto") == "" {
-		proto := "http"
-		if req.TLS != nil {
-			proto = "https"
-		}
-		req.Header.Set("X-Forwarded-Proto", proto)
-	}
-
-	// Strip hop-by-hop headers for standard HTTP proxying
-	stripHopByHopHeaders(req.Header)
+	// Overwrite (never trust) forwarding headers, then strip hop-by-hop state.
+	SanitizeForwardedHeaders(req.Header, originalHost, proto, PeerIPFromAddr(peerAddr))
+	return nil
 }
 
 // Hop-by-hop headers according to RFC 2616 Section 13.5.1

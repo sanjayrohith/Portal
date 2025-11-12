@@ -60,7 +60,13 @@ func (b *StreamBridge) bridgeHTTPWithRewrite(stream net.Conn, upstream net.Conn)
 	}
 
 	if b.rewriter != nil {
-		b.rewriter.RewriteRequest(req)
+		var peerAddr string
+		if addr := stream.RemoteAddr(); addr != nil {
+			peerAddr = addr.String()
+		}
+		if err := b.rewriter.RewriteRequestFromPeer(req, peerAddr); err != nil {
+			return fmt.Errorf("failed to sanitize proxied request: %w", err)
+		}
 	}
 
 	if err := WriteHTTPRequest(upstream, req); err != nil {

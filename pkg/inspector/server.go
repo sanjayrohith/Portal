@@ -86,15 +86,37 @@ func (s *Server) Handler() http.Handler {
 // Listen opens the loopback-only listener without starting the HTTP serving
 // loop. This is useful for callers that need to manage Serve themselves.
 func (s *Server) Listen() (net.Listener, error) {
+	if err := validateInspectorAddr(s.addr); err != nil {
+		return nil, err
+	}
 	return net.Listen("tcp4", s.addr)
 }
 
-// Serve serves inspector requests on an already-opened listener.
+// Serve serves inspector requests on an already-opened listener. The
+// listener address is verified to be strict loopback first, so a caller
+// cannot accidentally (or maliciously) expose captured traffic on an
+// external interface by passing in a 0.0.0.0 listener.
 func (s *Server) Serve(listener net.Listener) error {
 	if listener == nil {
 		return fmt.Errorf("inspector listener cannot be nil")
 	}
+	if err := verifyLoopbackListener(listener); err != nil {
+		return err
+	}
 	return s.httpServer.Serve(listener)
+}
+
+// verifyLoopbackListener rejects listeners bound anywhere but 127.0.0.1.
+func verifyLoopbackListener(listener net.Listener) error {
+	addr := listener.Addr().String()
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return fmt.Errorf("inspector listener has invalid address %q: %w", addr, err)
+	}
+	if host != "127.0.0.1" {
+		return fmt.Errorf("inspector listener must bind strictly to loopback (127.0.0.1), got %q", host)
+	}
+	return nil
 }
 
 // ListenAndServe opens the configured loopback listener and serves requests.
