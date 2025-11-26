@@ -1,0 +1,16 @@
+{
+  "token": "verification_token_deprecated",
+  "team_id": "T12345678",
+  "api_app_id": "A12345678",
+  "event": {
+    "type": "app_mention",
+    "user": "U12345678",
+    "text": "<@U98765432> status report please",
+    "ts": "1699900100.000200",
+    "channel": "C12345678",
+    "event_ts": "1699900100.000200"
+  },
+  "type": "event_callback",
+  "event_id": "Ev12345678",
+  "event_time": 1699900100
+}

@@ -1,0 +1,18 @@
+{
+  "id": "evt_1N4m2x2eZvKYlo2CLm123456",
+  "object": "event",
+  "api_version": "2023-10-16",
+  "created": 1699900000,
+  "data": {
+    "object": {
+      "id": "cs_test_a1b2c3d4e5f6",
+      "object": "checkout.session",
+      "amount_total": 4999,
+      "currency": "usd",
+      "customer_email": "developer@example.com",
+      "payment_status": "paid",
+      "status": "complete"
+    }
+  },
+  "type": "checkout.session.completed"
+}

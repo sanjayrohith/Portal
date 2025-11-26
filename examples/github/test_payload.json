@@ -1,0 +1,24 @@
+{
+  "action": "opened",
+  "issue": {
+    "url": "https://api.github.com/repos/sanjayrohith/portal/issues/42",
+    "number": 42,
+    "title": "Support automated health checks via doctor CLI",
+    "user": {
+      "login": "octocat",
+      "id": 1
+    },
+    "state": "open",
+    "body": "Implement diagnostic probes for local tunnels."
+  },
+  "repository": {
+    "name": "portal",
+    "full_name": "sanjayrohith/portal",
+    "owner": {
+      "login": "sanjayrohith"
+    }
+  },
+  "sender": {
+    "login": "octocat"
+  }
+}
