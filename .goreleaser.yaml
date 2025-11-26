@@ -69,6 +69,49 @@ checksum:
   name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
   algorithm: sha256
 
+nfpms:
+  - id: portal-packages
+    package_name: portal
+    builds:
+      - portal
+    vendor: Sanjay Rohith
+    homepage: https://github.com/sanjayrohith/portal
+    maintainer: Sanjay Rohith <sanjayrohith1802@gmail.com>
+    description: Open-source localhost tunneling tool with stable custom subdomains
+    license: Apache-2.0
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin
+    section: net
+    contents:
+      - src: docs/portal.1
+        dst: /usr/share/man/man1/portal.1
+        file_info:
+          mode: 0644
+
+brews:
+  - name: portal
+    ids:
+      - portal
+    repository:
+      owner: sanjayrohith
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    commit_author:
+      name: "Sanjay Rohith"
+      email: "sanjayrohith1802@gmail.com"
+    commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
+    homepage: "https://github.com/sanjayrohith/portal"
+    description: "Open-source localhost tunneling tool with stable custom subdomains"
+    license: "Apache-2.0"
+    install: |
+      bin.install "portal"
+      man1.install "docs/portal.1" if File.exist?("docs/portal.1")
+    test: |
+      system "#{bin}/portal --version"
+
+
 snapshot:
   version_template: "{{ .Timestamp }}-next"
 

@@ -1,0 +1,22 @@
+# nfpm.yaml — packaging specification for Debian and RPM packages
+name: portal
+arch: "${ARCH}"
+platform: linux
+version: "1.0.0"
+section: net
+priority: optional
+maintainer: Sanjay Rohith <sanjayrohith1802@gmail.com>
+description: Open-source localhost tunneling tool with stable custom subdomains
+vendor: Sanjay Rohith
+homepage: https://github.com/sanjayrohith/portal
+license: Apache-2.0
+
+contents:
+  - src: ./portal
+    dst: /usr/bin/portal
+    file_info:
+      mode: 0755
+  - src: ./docs/portal.1
+    dst: /usr/share/man/man1/portal.1
+    file_info:
+      mode: 0644

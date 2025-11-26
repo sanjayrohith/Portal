@@ -1,0 +1,16 @@
+Source: portal
+Section: net
+Priority: optional
+Maintainer: Sanjay Rohith <sanjayrohith1802@gmail.com>
+Build-Depends: debhelper-compat (= 13), golang-go (>= 1.22)
+Standards-Version: 4.6.2
+Homepage: https://github.com/sanjayrohith/portal
+Rules-Requires-Root: no
+
+Package: portal
+Architecture: any
+Depends: ${misc:Depends}
+Description: Open-source localhost tunneling tool with stable custom subdomains
+ Portal allows developers to expose local servers to the public internet
+ with persistent, user-chosen subdomains, built-in TLS, an in-memory web
+ inspector at 127.0.0.1:4040, and custom binary stream multiplexing.
