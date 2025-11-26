@@ -3,10 +3,12 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/sanjayrohith/portal/internal/config"
+	"github.com/sanjayrohith/portal/pkg/doctor"
 	"github.com/sanjayrohith/portal/pkg/logger"
 	"github.com/sanjayrohith/portal/pkg/telemetry"
 )
@@ -95,6 +97,45 @@ to expose local HTTP servers on stable, custom subdomains.`,
 			}
 		},
 	}
+	doctorServer    string
+	doctorTarget    string
+	doctorInspector string
+	doctorInsecure  bool
+	doctorJSON      bool
+	doctorTimeout   time.Duration
+
+	doctorCmd = &cobra.Command{
+		Use:   "doctor",
+		Short: "Verify local network environment, DNS resolution, and TLS handshake",
+		Long: `Doctor performs a battery of diagnostic probes verifying that the local loopback
+interface is active, the inspector port is bindable, the control plane hostname resolves
+via DNS, TCP connectivity succeeds, and a TLS 1.3 handshake with ALPN negotiation completes.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			opts := doctor.Options{
+				ServerAddr:         doctorServer,
+				LocalTarget:        doctorTarget,
+				InspectorAddr:      doctorInspector,
+				InsecureSkipVerify: doctorInsecure,
+				Timeout:            doctorTimeout,
+			}
+
+			report := doctor.RunDiagnostics(opts)
+			if doctorJSON {
+				out, err := doctor.FormatJSON(report)
+				if err != nil {
+					return err
+				}
+				fmt.Fprintln(cmd.OutOrStdout(), out)
+			} else {
+				fmt.Fprintln(cmd.OutOrStdout(), doctor.FormatText(report))
+			}
+
+			if !report.AllPassed {
+				return fmt.Errorf("one or more diagnostic checks failed")
+			}
+			return nil
+		},
+	}
 )
 
 func init() {
@@ -111,9 +152,17 @@ func init() {
 	httpCmd.Flags().BoolVar(&clientCfg.InsecureSkipVerify, "insecure", clientCfg.InsecureSkipVerify, "Skip TLS certificate verification (development only)")
 	httpCmd.Flags().StringVar(&clientCfg.LogLevel, "log-level", clientCfg.LogLevel, "Logging level (debug, info, warn, error)")
 
+	doctorCmd.Flags().StringVar(&doctorServer, "server", clientCfg.ServerAddr, "Control plane server address (host:port)")
+	doctorCmd.Flags().StringVar(&doctorTarget, "target", clientCfg.LocalTarget, "Local upstream target to probe (host:port)")
+	doctorCmd.Flags().StringVar(&doctorInspector, "inspector-addr", clientCfg.InspectorAddr, "Address for local request inspector UI")
+	doctorCmd.Flags().BoolVar(&doctorInsecure, "insecure", clientCfg.InsecureSkipVerify, "Allow untrusted or self-signed TLS certificates")
+	doctorCmd.Flags().BoolVar(&doctorJSON, "json", false, "Output diagnostic report as JSON")
+	doctorCmd.Flags().DurationVar(&doctorTimeout, "timeout", 5*time.Second, "Timeout per diagnostic network probe")
+
 	rootCmd.AddCommand(httpCmd)
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(completionCmd)
+	rootCmd.AddCommand(doctorCmd)
 	statusCmd.Flags().StringVar(&statusAddr, "addr", telemetry.DefaultStatusAddr, "Local agent status address")
 	statusCmd.Flags().StringVar(&statusToken, "token", "", "Bearer token for the local status endpoint")
 	statusCmd.Flags().BoolVar(&statusJSON, "json", false, "Print status as JSON")
