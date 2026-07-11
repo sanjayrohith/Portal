@@ -163,6 +163,8 @@ curl -s -H 'Host: myapp.tunnel.example.com' http://127.0.0.1:80/ | head -c 200
 
 ## 10. Troubleshooting
 
+For deep-dive connection triage procedures, Wi-Fi handoff recovery, and operational FAQ, see the comprehensive [Troubleshooting & FAQ Guide](troubleshooting.md).
+
 | Symptom | Likely cause | Fix |
 | ------- | ------------ | --- |
 | Subdomain resolves nowhere | Wildcard A record missing | Re-check `dig *.tunnel.example.com` |

@@ -216,6 +216,7 @@ Portal is designed with strict boundaries to ensure robustness:
 - [Transport Protocol Architecture](docs/architecture.md) — In-depth binary wire format and flow control rationale
 - [Self-Hosting Guide](docs/self-hosting.md) — Complete VPS, DNS, and TLS setup instructions
 - [Security Hardening Checklist](docs/security.md) — Production deployment security checklist
+- [Operational Troubleshooting & FAQ](docs/troubleshooting.md) — Real-world deployment triage and connection recovery
 - [Throughput & Latency Benchmarks](docs/benchmarks.md) — Performance metrics and reproducibility guides
 - [Webhook Integration Examples](examples/README.md) — Runnable Stripe, GitHub, and Slack receiver fixtures
 
