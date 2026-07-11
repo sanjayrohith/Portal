@@ -3,6 +3,7 @@ package resilience
 import (
 	"context"
 	"fmt"
+	"net"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -35,6 +36,7 @@ func (s HealthStatus) String() string {
 // HealthWatchdog monitors connection liveness via session heartbeats, ping responses, and transport drops.
 type HealthWatchdog struct {
 	session            *mux.Session
+	boundLocalIP       string
 	interval           time.Duration
 	pingTimeout        time.Duration
 	maxMissedPings     int
@@ -60,8 +62,18 @@ func NewHealthWatchdog(session *mux.Session, interval, pingTimeout time.Duration
 		maxMissed = 3
 	}
 
+	var boundIP string
+	if session != nil && session.LocalAddr() != nil {
+		if host, _, err := net.SplitHostPort(session.LocalAddr().String()); err == nil {
+			boundIP = host
+		} else {
+			boundIP = session.LocalAddr().String()
+		}
+	}
+
 	w := &HealthWatchdog{
 		session:            session,
+		boundLocalIP:       boundIP,
 		interval:           interval,
 		pingTimeout:        pingTimeout,
 		maxMissedPings:     maxMissed,
@@ -111,12 +123,21 @@ func (w *HealthWatchdog) probe() {
 		return
 	}
 
+	// Detect abrupt Wi-Fi to Ethernet interface handoff
+	if w.hasInterfaceMigrated() {
+		w.status.Store(int32(StatusDead))
+		w.notifyDisruption()
+		_ = w.session.Close()
+		return
+	}
+
 	rtt, err := w.session.Ping(w.pingTimeout)
 	if err != nil {
 		missed := w.missedPingsCount.Add(1)
 		if int(missed) >= w.maxMissedPings {
 			w.status.Store(int32(StatusDead))
 			w.notifyDisruption()
+			_ = w.session.Close()
 		} else {
 			w.status.Store(int32(StatusDegraded))
 		}
@@ -126,6 +147,33 @@ func (w *HealthWatchdog) probe() {
 	w.missedPingsCount.Store(0)
 	w.lastRTT.Store(rtt.Nanoseconds())
 	w.status.Store(int32(StatusHealthy))
+}
+
+// hasInterfaceMigrated reports whether the network interface IP that the socket bound to
+// is no longer present on any active system network interfaces.
+func (w *HealthWatchdog) hasInterfaceMigrated() bool {
+	if w.boundLocalIP == "" {
+		return false
+	}
+	parsed := net.ParseIP(w.boundLocalIP)
+	if parsed == nil || parsed.IsLoopback() {
+		return false
+	}
+
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return false
+	}
+
+	for _, a := range addrs {
+		if ipNet, ok := a.(*net.IPNet); ok {
+			if ipNet.IP.Equal(parsed) {
+				return false
+			}
+		}
+	}
+
+	return true
 }
 
 func (w *HealthWatchdog) notifyDisruption() {

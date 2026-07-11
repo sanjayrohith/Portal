@@ -19,6 +19,10 @@ type SocketOptions struct {
 	// KeepAliveInterval is the interval between probes (best effort; the
 	// stdlib exposes idle time portably, interval via OS defaults).
 	KeepAliveInterval time.Duration
+	// UserTimeout bounds how long transmitted data can remain unacknowledged
+	// before the TCP connection is forcefully closed (TCP_USER_TIMEOUT).
+	// Prevents dead connection hangs during Wi-Fi to Ethernet interface migration.
+	UserTimeout time.Duration
 	// ReadBufferSize sets SO_RCVBUF when positive.
 	ReadBufferSize int
 	// WriteBufferSize sets SO_SNDBUF when positive.
@@ -26,13 +30,14 @@ type SocketOptions struct {
 }
 
 // DefaultSocketOptions returns production-grade TCP tuning for tunnels:
-// no Nagle delay, 30s keepalive idle, 256KB socket buffers.
+// no Nagle delay, 15s keepalive idle, 10s TCP_USER_TIMEOUT, 256KB socket buffers.
 func DefaultSocketOptions() SocketOptions {
 	return SocketOptions{
 		NoDelay:           true,
 		KeepAlive:         true,
-		KeepAliveIdle:     30 * time.Second,
-		KeepAliveInterval: 10 * time.Second,
+		KeepAliveIdle:     15 * time.Second,
+		KeepAliveInterval: 5 * time.Second,
+		UserTimeout:       10 * time.Second,
 		ReadBufferSize:    256 * 1024,
 		WriteBufferSize:   256 * 1024,
 	}
@@ -55,6 +60,13 @@ func TuneConn(conn net.Conn, opts SocketOptions) error {
 	if opts.KeepAlive && opts.KeepAliveIdle > 0 {
 		if err := tcp.SetKeepAlivePeriod(opts.KeepAliveIdle); err != nil {
 			return fmt.Errorf("set keepalive period: %w", err)
+		}
+	}
+	if opts.UserTimeout > 0 {
+		if raw, err := tcp.SyscallConn(); err == nil {
+			_ = raw.Control(func(fd uintptr) {
+				_ = setTCPUserTimeout(fd, opts.UserTimeout)
+			})
 		}
 	}
 	if opts.ReadBufferSize > 0 {

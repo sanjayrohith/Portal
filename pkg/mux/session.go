@@ -127,12 +127,28 @@ func (s *Session) onStreamClosed(id uint32) {
 	s.streamsMu.Unlock()
 }
 
-func (s *Session) localAddr() net.Addr {
+// LocalAddr returns the underlying connection's local address.
+func (s *Session) LocalAddr() net.Addr {
+	if s.conn == nil {
+		return nil
+	}
 	return s.conn.LocalAddr()
 }
 
-func (s *Session) remoteAddr() net.Addr {
+// RemoteAddr returns the underlying connection's remote address.
+func (s *Session) RemoteAddr() net.Addr {
+	if s.conn == nil {
+		return nil
+	}
 	return s.conn.RemoteAddr()
+}
+
+func (s *Session) localAddr() net.Addr {
+	return s.LocalAddr()
+}
+
+func (s *Session) remoteAddr() net.Addr {
+	return s.RemoteAddr()
 }
 
 // Close gracefully terminates the session and all active streams.

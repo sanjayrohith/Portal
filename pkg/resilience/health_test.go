@@ -33,6 +33,38 @@ func TestHealthWatchdog_HealthySession(t *testing.T) {
 	watchdog.Stop()
 }
 
+func TestHealthWatchdog_InterfaceMigrationDetection(t *testing.T) {
+	c1, c2 := net.Pipe()
+	defer c1.Close()
+	defer c2.Close()
+
+	clientSession := mux.NewSession(c1, false)
+	defer clientSession.Close()
+
+	watchdog := NewHealthWatchdog(clientSession, 20*time.Millisecond, 50*time.Millisecond, 1)
+	// Simulate bound to an old Wi-Fi IP that no longer exists on any interface
+	watchdog.boundLocalIP = "198.51.100.254"
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	watchdog.Start(ctx)
+
+	select {
+	case <-watchdog.DisruptionChan():
+		if watchdog.Status() != StatusDead {
+			t.Errorf("expected StatusDead after interface migration, got %s", watchdog.Status())
+		}
+		if !clientSession.IsClosed() {
+			t.Errorf("expected clientSession to be closed on interface migration")
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatalf("timed out waiting for interface migration disruption")
+	}
+
+	watchdog.Stop()
+}
+
 func TestHealthWatchdog_DisruptionDetectionOnDrop(t *testing.T) {
 	c1, c2 := net.Pipe()
 

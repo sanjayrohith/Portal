@@ -64,7 +64,14 @@ func (pm *pingManager) Ping(timeout time.Duration) (time.Duration, error) {
 	pm.mu.Unlock()
 
 	pingFrame := protocol.NewPingFrame(nonce)
-	if err := pm.session.sendFrame(pingFrame); err != nil {
+	if pm.session.conn != nil {
+		_ = pm.session.conn.SetWriteDeadline(time.Now().Add(timeout))
+	}
+	err := pm.session.sendFrame(pingFrame)
+	if pm.session.conn != nil {
+		_ = pm.session.conn.SetWriteDeadline(time.Time{})
+	}
+	if err != nil {
 		pm.mu.Lock()
 		delete(pm.waiters, nonce)
 		pm.mu.Unlock()
