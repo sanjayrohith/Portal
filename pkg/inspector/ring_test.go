@@ -121,3 +121,67 @@ func TestRingBufferConcurrentAccess(t *testing.T) {
 		t.Fatalf("List() after concurrent writes returned %d, want %d", got, capacity)
 	}
 }
+
+func TestRingBufferMemoryRecycling(t *testing.T) {
+	buf := NewRingBuffer(5)
+	payload := make([]byte, 1024)
+	for i := range payload {
+		payload[i] = byte(i % 256)
+	}
+
+	// Add 50 transactions to trigger recycling across slots
+	for i := 0; i < 50; i++ {
+		buf.Add(&CapturedTransaction{
+			ID: fmt.Sprintf("tx-%d", i),
+			Request: CapturedRequest{
+				Body: payload,
+			},
+			Response: &CapturedResponse{
+				Body: payload,
+			},
+		})
+	}
+
+	if buf.Len() != 5 {
+		t.Fatalf("expected len 5, got %d", buf.Len())
+	}
+
+	list := buf.List()
+	if len(list) != 5 {
+		t.Fatalf("expected 5 transactions, got %d", len(list))
+	}
+	for _, tx := range list {
+		if len(tx.Request.Body) != 1024 || len(tx.Response.Body) != 1024 {
+			t.Fatalf("corrupted body in recycled transaction: %d, %d", len(tx.Request.Body), len(tx.Response.Body))
+		}
+	}
+
+	buf.Clear()
+	if buf.Len() != 0 {
+		t.Fatalf("expected 0 after Clear, got %d", buf.Len())
+	}
+}
+
+func BenchmarkRingBufferSustainedWebhookBursts(b *testing.B) {
+	ring := NewRingBuffer(200)
+	body := make([]byte, 8*1024) // 8KB webhook JSON payload
+
+	tx := &CapturedTransaction{
+		ID: "bench-tx",
+		Request: CapturedRequest{
+			Headers: HeaderValues{"Content-Type": {"application/json"}},
+			Body:    body,
+		},
+		Response: &CapturedResponse{
+			Headers: HeaderValues{"Content-Type": {"application/json"}},
+			Body:    body,
+		},
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		ring.Add(tx)
+	}
+}
