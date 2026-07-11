@@ -17,16 +17,16 @@ permissive licenses. All dependencies have been verified for compliance with the
 | `github.com/spf13/pflag` | `v1.0.10` | BSD-3-Clause | https://github.com/spf13/pflag |
 | `gopkg.in/yaml.v3` | `v3.0.1` | MIT / Apache-2.0 | https://github.com/go-yaml/yaml |
 | `modernc.org/sqlite` | `v1.58.0` | BSD-3-Clause | https://gitlab.com/cznic/sqlite |
-| `modernc.org/libc` | `v1.75.6` | BSD-3-Clause | https://gitlab.com/cznic/libc |
+| `modernc.org/libc` | `v1.75.7` | BSD-3-Clause | https://gitlab.com/cznic/libc |
 | `modernc.org/mathutil` | `v1.7.1` | BSD-3-Clause | https://gitlab.com/cznic/mathutil |
 | `modernc.org/memory` | `v1.12.1` | BSD-3-Clause | https://gitlab.com/cznic/memory |
 | `github.com/google/uuid` | `v1.6.0` | BSD-3-Clause | https://github.com/google/uuid |
 | `github.com/mattn/go-isatty` | `v0.0.24` | MIT | https://github.com/mattn/go-isatty |
-| `github.com/miekg/dns` | `v1.1.72` | BSD-3-Clause | https://github.com/miekg/dns |
-| `golang.org/x/crypto` | `v0.54.0` | BSD-3-Clause | https://go.googlesource.com/crypto |
-| `golang.org/x/net` | `v0.57.0` | BSD-3-Clause | https://go.googlesource.com/net |
+| `github.com/miekg/dns` | `v1.1.73` | BSD-3-Clause | https://github.com/miekg/dns |
+| `golang.org/x/crypto` | `v0.56.0` | BSD-3-Clause | https://go.googlesource.com/crypto |
+| `golang.org/x/net` | `v0.58.0` | BSD-3-Clause | https://go.googlesource.com/net |
 | `golang.org/x/sys` | `v0.47.0` | BSD-3-Clause | https://go.googlesource.com/sys |
-| `google.golang.org/protobuf` | `v1.36.11` | BSD-3-Clause | https://github.com/protocolbuffers/protobuf-go |
+| `google.golang.org/protobuf` | `v1.36.12` | BSD-3-Clause | https://github.com/protocolbuffers/protobuf-go |
 
 ---
 
